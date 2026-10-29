@@ -40,16 +40,17 @@
         <section id="screen-auth" class="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-8 mt-10 border border-slate-100">
             <div class="text-center mb-6">
                 <h2 class="text-2xl font-bold text-slate-900">UBT Platform Login</h2>
+                <p class="text-xs text-amber-700 bg-amber-50 rounded-lg p-2 mt-3">Prototype mode: account data is stored in this browser only. This is not secure server-side authentication.</p>
                 <p class="text-sm text-slate-500 mt-1">AI-Driven Adaptive UBT Preparation Platform</p>
             </div>
             <form id="auth-form" onsubmit="handleAuth(event)" class="space-y-4">
                 <div>
                     <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Email</label>
-                    <input type="email" id="auth-email" required value="student@aitu.kz" class="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+                    <input type="email" id="auth-email" required placeholder="you@example.com" class="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Password</label>
-                    <input type="password" id="auth-password" required value="secret123" class="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+                    <input type="password" id="auth-password" required minlength="6" placeholder="At least 6 characters" class="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">UBT Profile Pair</label>
@@ -61,7 +62,7 @@
                     </select>
                 </div>
                 <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl transition shadow-lg shadow-indigo-100">
-                    Sign In / Start Practice
+                    Continue to UBT.AI (local demo account)
                 </button>
             </form>
         </section>
@@ -252,13 +253,13 @@
             </div>
             <div>
                 <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Grade / Level</label>
-                <input type="text" value="Grade 11" class="w-full px-4 py-2 border rounded-xl text-sm">
+                <input id="profile-grade" type="text" value="Grade 11" class="w-full px-4 py-2 border rounded-xl text-sm">
             </div>
             <div>
                 <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Language</label>
-                <input type="text" value="English (EN)" class="w-full px-4 py-2 border rounded-xl text-sm">
+                <select id="profile-language" class="w-full px-4 py-2 border rounded-xl text-sm"><option>English (EN)</option><option>Русский (RU)</option><option>Қазақша (KZ)</option></select>
             </div>
-            <button onclick="alert('Profile settings saved successfully!')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl transition text-sm">
+            <button onclick="saveProfile()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl transition text-sm">
                 Save Changes
             </button>
         </section>
@@ -267,241 +268,82 @@
 
     <!-- FRONTEND SCRIPT & APPLICATION LOGIC -->
     <script>
-        // Lucide Icons Initialization
-        lucide.createIcons();
-
-        // Application State
-        let currentUser = "student@aitu.kz";
-        let studentName = "Student";
-        let activeSubjects = [
-            { id: "math_lit", title: "Mathematical Literacy", type: "Mandatory", questionsCount: 2, progress: 50 },
-            { id: "reading_lit", title: "Reading Literacy", type: "Mandatory", questionsCount: 2, progress: 0 },
-            { id: "kazakhstan_history", title: "History of Kazakhstan", type: "Mandatory", questionsCount: 2, progress: 0 },
-            { id: "math_profile", title: "Mathematics (Elective)", type: "Profile", questionsCount: 2, progress: 0 },
-            { id: "informatics", title: "Computer Science (Elective)", type: "Profile", questionsCount: 2, progress: 0 }
+        // UBT.AI functional prototype. Persistence is local to this browser; use a backend for secure accounts.
+        if (window.lucide) lucide.createIcons();
+        const STORAGE_KEY = 'ubt_ai_prototype_v2';
+        let currentUser = null, userProfile = {}, currentTestQuestions = [], currentQuestionIdx = 0;
+        let userAnswers = {}, activeMistakes = [], activeSubjectId = 'math_lit', reviewQuestion = null, recheckQuestion = null;
+        let testStartedAt = null, timerHandle = null, remainingSeconds = 300;
+        const subjectBase = [
+          {id:'math_lit',title:'Mathematical Literacy',type:'Mandatory'},
+          {id:'reading_lit',title:'Reading Literacy',type:'Mandatory'},
+          {id:'kazakhstan_history',title:'History of Kazakhstan',type:'Mandatory'},
+          {id:'math_profile',title:'Mathematics (Elective)',type:'Profile'},
+          {id:'informatics',title:'Computer Science (Elective)',type:'Profile'}
         ];
-
-        let currentTestQuestions = [];
-        let currentQuestionIdx = 0;
-        let userAnswers = {};
-        let activeMistakes = [];
-
-        // Question Bank (English Version)
-        const localQuestionBank = {
-            "math_lit": [
-                {
-                    id: "q_math_01",
-                    subject_title: "Mathematical Literacy",
-                    topic: "Combinatorics and Probability",
-                    skill_id: "skill_conditional_prob",
-                    prompt: "An urn contains 3 white balls and 7 black balls. Two balls are drawn successively without replacement. What is the probability that both drawn balls are white?",
-                    options: ["A) 1/15", "B) 9/100", "C) 3/10", "D) 1/5"],
-                    correct_idx: 0,
-                    explanation: "Probability of the first white ball: 3/10. Remaining: 2 white and 9 total. Probability of the second white ball: 2/9. Total probability: (3/10) * (2/9) = 6/90 = 1/15."
-                },
-                {
-                    id: "q_math_02",
-                    subject_title: "Mathematical Literacy",
-                    topic: "Work Rate Problems",
-                    skill_id: "skill_work_rate",
-                    prompt: "Pipe A fills a pool in 3 hours, and Pipe B fills the same pool in 6 hours. How many hours will it take to fill the pool if both pipes are open together?",
-                    options: ["A) 2 hours", "B) 4.5 hours", "C) 9 hours", "D) 1.5 hours"],
-                    correct_idx: 0,
-                    explanation: "Combined rate: 1/3 + 1/6 = 3/6 = 1/2 of the pool per hour. Time required: 1 / (1/2) = 2 hours."
-                }
-            ],
-            "informatics": [
-                {
-                    id: "q_cs_01",
-                    subject_title: "Computer Science",
-                    topic: "Algorithms and Data Structures",
-                    skill_id: "skill_complexity",
-                    prompt: "What is the worst-case time complexity of the QuickSort algorithm?",
-                    options: ["A) O(n log n)", "B) O(n^2)", "C) O(n)", "D) O(1)"],
-                    correct_idx: 1,
-                    explanation: "In the worst-case scenario (e.g., when the pivot selection consistently isolates a single element on an already sorted array), QuickSort executes in O(n^2) time."
-                }
-            ]
+        const profilePairs = {
+          'Math-Informatics':['math_profile','informatics'], 'Math-Physics':['math_profile','physics'],
+          'Biology-Chemistry':['biology','chemistry'], 'WorldHistory-Law':['world_history','law']
         };
-
-        // Screen Navigation
-        function showScreen(screenId) {
-            ['screen-auth', 'screen-dashboard', 'screen-subjects', 'screen-test', 'screen-results', 'screen-agent', 'screen-history', 'screen-profile'].forEach(id => {
-                document.getElementById(id).classList.add('hidden');
-            });
-            document.getElementById('screen-' + screenId).classList.remove('hidden');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            lucide.createIcons();
-        }
-
-        // Authentication Handler
-        function handleAuth(e) {
-            e.preventDefault();
-            currentUser = document.getElementById('auth-email').value;
-            document.getElementById('profile-email-disp').value = currentUser;
-            renderSubjects();
-            showScreen('dashboard');
-        }
-
-        function logout() {
-            showScreen('auth');
-        }
-
-        // Subjects Catalog Render
-        function renderSubjects() {
-            const grid = document.getElementById('subjects-grid');
-            grid.innerHTML = '';
-            activeSubjects.forEach(sub => {
-                grid.innerHTML += `
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
-                        <div>
-                            <span class="text-xs font-semibold px-2.5 py-1 rounded-full ${sub.type === 'Mandatory' ? 'bg-indigo-50 text-indigo-600' : 'bg-violet-50 text-violet-600'}">${sub.type}</span>
-                            <h3 class="font-bold text-slate-800 text-lg mt-3">${sub.title}</h3>
-                            <p class="text-xs text-slate-500 mt-1">Available Questions: ${sub.questionsCount}</p>
-                        </div>
-                        <div class="mt-6 flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-600">Progress: ${sub.progress}%</span>
-                            <button onclick="startDiagnosticTest('${sub.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition shadow-md shadow-indigo-100">
-                                Start Test
-                            </button>
-                        </div>
-                    </div>
-                `;
-            });
-        }
-
-        // Start Diagnostic Test Session
-        function startDiagnosticTest(subjectId) {
-            currentTestQuestions = localQuestionBank[subjectId] || localQuestionBank["math_lit"];
-            currentQuestionIdx = 0;
-            userAnswers = {};
-            showScreen('test');
-            renderQuestion();
-        }
-
-        // Render Active Question
-        function renderQuestion() {
-            const q = currentTestQuestions[currentQuestionIdx];
-            document.getElementById('test-subject-title').innerText = q.subject_title;
-            document.getElementById('test-progress-title').innerText = `Question ${currentQuestionIdx + 1} of ${currentTestQuestions.length}`;
-            
-            let optionsHTML = '';
-            q.options.forEach((opt, idx) => {
-                let isChecked = userAnswers[currentQuestionIdx] === idx ? 'checked' : '';
-                optionsHTML += `
-                    <label class="flex items-center space-x-3 p-3.5 border rounded-xl cursor-pointer hover:bg-slate-50 transition ${isChecked ? 'border-indigo-600 bg-indigo-50/50' : 'border-slate-200'}">
-                        <input type="radio" name="test-option" value="${idx}" ${isChecked} onchange="userAnswers[currentQuestionIdx] = ${idx}" class="text-indigo-600 focus:ring-indigo-500">
-                        <span class="text-sm font-medium text-slate-700">${opt}</span>
-                    </label>
-                `;
-            });
-
-            document.getElementById('question-container').innerHTML = `
-                <div class="space-y-2">
-                    <span class="text-xs font-semibold text-slate-400 uppercase">Topic: ${q.topic}</span>
-                    <h4 class="font-bold text-slate-800 text-base">${q.prompt}</h4>
-                </div>
-                <div class="space-y-3">${optionsHTML}</div>
-            `;
-        }
-
-        function nextQuestion() {
-            if (currentQuestionIdx < currentTestQuestions.length - 1) {
-                currentQuestionIdx++;
-                renderQuestion();
-            } else {
-                submitTest();
-            }
-        }
-
-        function prevQuestion() {
-            if (currentQuestionIdx > 0) {
-                currentQuestionIdx--;
-                renderQuestion();
-            }
-        }
-
-        // Test Evaluation
-        function submitTest() {
-            let score = 0;
-            activeMistakes = [];
-            currentTestQuestions.forEach((q, idx) => {
-                let userAns = userAnswers[idx];
-                if (userAns === q.correct_idx) {
-                    score++;
-                } else {
-                    activeMistakes.push({
-                        question_id: q.id,
-                        topic: q.topic,
-                        skill_id: q.skill_id,
-                        user_answer: q.options[userAns] || "No Answer Selected",
-                        correct_answer: q.options[q.correct_idx],
-                        explanation: q.explanation
-                    });
-                }
-            });
-
-            document.getElementById('res-score-circle').innerText = `${score}/${currentTestQuestions.length}`;
-            document.getElementById('res-score-val').innerText = `${score} out of ${currentTestQuestions.length}`;
-            document.getElementById('res-mistakes-val').innerText = `${activeMistakes.length} mistake(s)`;
-
-            let mistakesHTML = '';
-            if (activeMistakes.length === 0) {
-                mistakesHTML = `<p class="text-xs text-emerald-600 font-semibold">Excellent work! Zero mistakes recorded.</p>`;
-            } else {
-                activeMistakes.forEach(m => {
-                    mistakesHTML += `
-                        <div class="p-3 bg-rose-50 border border-rose-100 rounded-xl flex justify-between items-center">
-                            <div>
-                                <h5 class="text-xs font-bold text-slate-800">${m.topic}</h5>
-                                <p class="text-xs text-slate-500">Your Answer: ${m.user_answer}</p>
-                            </div>
-                            <button onclick="openAgentReview('${m.question_id}')" class="bg-rose-600 hover:bg-rose-700 text-white text-xs px-3 py-1.5 rounded-lg font-semibold transition">
-                                Review with AI
-                            </button>
-                        </div>
-                    `;
-                });
-            }
-            document.getElementById('mistakes-review-container').innerHTML = mistakesHTML;
-            showScreen('results');
-        }
-
-        // Open AI Agent Mistake Explanation & Recheck Session
-        function openAgentReview(qId) {
-            let q = null;
-            Object.values(localQuestionBank).forEach(arr => {
-                let found = arr.find(item => item.id === qId);
-                if (found) q = found;
-            });
-            if (!q) q = localQuestionBank["math_lit"][0];
-
-            document.getElementById('agent-explanation-box').innerHTML = `
-                <h5 class="font-bold text-indigo-900">Topic: ${q.topic}</h5>
-                <p><strong>Original Question:</strong> ${q.prompt}</p>
-                <hr class="border-indigo-200 my-2">
-                <p><strong>Step-by-Step Verified Explanation:</strong> ${q.explanation}</p>
-            `;
-
-            // Independent Recheck Task
-            document.getElementById('recheck-question-box').innerHTML = `
-                <p class="text-xs font-semibold text-slate-700">Follow-up Task (Same Skill):</p>
-                <p class="text-xs text-slate-600">A box contains 4 red pencils and 6 blue pencils. Two pencils are drawn without replacement. Find the probability that both pencils are red.</p>
-                <div class="space-y-2 mt-2">
-                    <label class="flex items-center space-x-2 text-xs"><input type="radio" name="recheck" value="0"> <span>A) 2/15</span></label>
-                    <label class="flex items-center space-x-2 text-xs"><input type="radio" name="recheck" value="1"> <span>B) 4/25</span></label>
-                </div>
-            `;
-
-            showScreen('agent');
-        }
-
-        function submitRecheckAnswer() {
-            alert('Independent Answer Submitted! Skill updated to "Independently Confirmed". Dashboard recommendations refreshed.');
-            showScreen('dashboard');
-        }
-
-        // Initial Load
+        const subjectNames = {math_profile:'Mathematics (Elective)',informatics:'Computer Science',physics:'Physics',biology:'Biology',chemistry:'Chemistry',world_history:'World History',law:'Fundamentals of Law'};
+        const mandatoryIds = ['math_lit','reading_lit','kazakhstan_history'];
+        const Q=(id,subject_title,topic,skill_id,prompt,options,correct_idx,explanation,recheck)=>({id,subject_title,topic,skill_id,prompt,options,correct_idx,explanation,recheck});
+        const localQuestionBank = {
+          math_lit:[
+            Q('ml1','Mathematical Literacy','Combinatorics and Probability','probability','An urn contains 3 white balls and 7 black balls. Two balls are drawn without replacement. What is the probability that both are white?',['1/15','9/100','3/10','1/5'],0,'First draw: 3/10. After a white ball is removed, 2 white balls remain out of 9. Therefore (3/10) × (2/9) = 1/15.',Q('ml1r','Mathematical Literacy','Combinatorics and Probability','probability','A bag contains 4 red and 6 blue pencils. Two are drawn without replacement. What is the probability both are red?',['2/15','4/25','4/15','1/5'],0,'The probability is (4/10) × (3/9) = 12/90 = 2/15.')),
+            Q('ml2','Mathematical Literacy','Work Rate Problems','work_rate','Pipe A fills a pool in 3 hours and Pipe B in 6 hours. How long do they take together?',['2 hours','4.5 hours','9 hours','1.5 hours'],0,'Their combined rate is 1/3 + 1/6 = 1/2 pool per hour, so the pool takes 2 hours.',Q('ml2r','Mathematical Literacy','Work Rate Problems','work_rate','One pump fills a tank in 4 hours and another in 12 hours. How long together?',['3 hours','6 hours','8 hours','2 hours'],0,'Combined rate is 1/4 + 1/12 = 1/3 tank per hour, so it takes 3 hours.')),
+            Q('ml3','Mathematical Literacy','Percentages','percentages','A jacket costs 20,000 ₸ and is discounted by 15%. What is the sale price?',['17,000 ₸','18,500 ₸','15,000 ₸','3,000 ₸'],0,'15% of 20,000 is 3,000. Subtract the discount: 20,000 − 3,000 = 17,000 ₸.',Q('ml3r','Mathematical Literacy','Percentages','percentages','A 12,000 ₸ item is discounted by 25%. What is the new price?',['9,000 ₸','10,000 ₸','3,000 ₸','8,000 ₸'],0,'25% of 12,000 is 3,000; 12,000 − 3,000 = 9,000 ₸.'))
+          ],
+          reading_lit:[
+            Q('rl1','Reading Literacy','Main Idea','main_idea','A text explains how city trees reduce heat, absorb rainwater, and improve air quality. What is its main idea?',['Urban trees provide several environmental benefits','Trees are difficult to maintain','Cities should remove parks','Rainwater is always harmful'],0,'The main idea summarizes all the listed benefits, rather than focusing on just one detail.',Q('rl1r','Reading Literacy','Main Idea','main_idea','A passage describes how libraries provide books, internet access, and quiet study spaces. What is the main idea?',['Libraries support learning in several ways','Books are no longer useful','Libraries are only for children','Internet access is unnecessary'],0,'The passage lists several ways libraries support learning.')),
+            Q('rl2','Reading Literacy','Inference','inference','Mira took an umbrella, checked the dark clouds, and left early. What is the most reasonable inference?',['She expected possible rain','She planned to swim','The weather was certainly sunny','She forgot where she was going'],0,'The umbrella and dark clouds suggest she expected rain, though the text does not say rain was certain.',Q('rl2r','Reading Literacy','Inference','inference','A student packed water, a hat, and sunscreen before a long outdoor walk. What can be inferred?',['They expected to spend time outdoors in sunny or hot conditions','They planned to stay indoors','They expected snow','They were going to a swimming pool for sure'],0,'The items suggest preparation for an outdoor walk in sunny or hot conditions.')),
+            Q('rl3','Reading Literacy','Author’s Purpose','purpose','An article lists steps for safely storing food in a refrigerator. Its main purpose is to:',['Inform or instruct readers','Entertain with a fictional story','Persuade readers to buy a car','Describe a character'],0,'Step-by-step safety guidance is informative and instructional.',Q('rl3r','Reading Literacy','Author’s Purpose','purpose','A leaflet explains how to register for a school exam. Its main purpose is to:',['Give instructions','Tell a fantasy story','Criticize a film','Describe a landscape'],0,'The leaflet provides practical instructions for completing a process.'))
+          ],
+          kazakhstan_history:[
+            Q('kh1','History of Kazakhstan','Kazakh Khanate','kazakh_khanate','The Kazakh Khanate is traditionally dated to its establishment in:',['1465–1466','1219–1220','1731–1732','1991–1992'],0,'The establishment of the Kazakh Khanate under Kerei and Zhanibek is traditionally dated to 1465–1466.',Q('kh1r','History of Kazakhstan','Kazakh Khanate','kazakh_khanate','Which leaders are associated with the founding of the Kazakh Khanate?',['Kerei and Zhanibek','Ablai and Kenesary','Tauke and Kasym only','Alikhan and Akhmet'],0,'Kerei and Zhanibek are traditionally identified as the founders of the Kazakh Khanate.')),
+            Q('kh2','History of Kazakhstan','Independence','independence','Kazakhstan declared state independence on:',['16 December 1991','25 October 1990','30 August 1995','1 December 1991'],0,'The Constitutional Law on State Independence was adopted on 16 December 1991.',Q('kh2r','History of Kazakhstan','Independence','independence','Kazakhstan’s Independence Day is observed on:',['16 December','30 August','1 May','25 October'],0,'Independence Day is observed on 16 December.')),
+            Q('kh3','History of Kazakhstan','Capital City','capital','Which city became the capital of independent Kazakhstan in 1997?',['Akmola (later Astana)','Almaty in 2005','Shymkent','Turkistan'],0,'The capital was moved from Almaty to Akmola in 1997; the city was later renamed Astana.',Q('kh3r','History of Kazakhstan','Capital City','capital','From which city was the capital moved to Akmola in 1997?',['Almaty','Taraz','Aktobe','Kostanay'],0,'The capital was transferred from Almaty to Akmola in 1997.'))
+          ],
+          math_profile:[
+            Q('mp1','Mathematics (Elective)','Quadratic Equations','quadratics','Solve x² − 5x + 6 = 0.',['x = 2 or x = 3','x = −2 or x = −3','x = 1 or x = 6','No real roots'],0,'Factor: (x − 2)(x − 3) = 0, so x = 2 or x = 3.',Q('mp1r','Mathematics (Elective)','Quadratic Equations','quadratics','Solve x² − 7x + 12 = 0.',['x = 3 or x = 4','x = 2 or x = 6','x = −3 or x = −4','No real roots'],0,'Factor: (x − 3)(x − 4) = 0, so x = 3 or x = 4.')),
+            Q('mp2','Mathematics (Elective)','Functions','functions','If f(x) = 2x + 3, what is f(4)?',['11','8','7','14'],0,'Substitute x = 4: f(4) = 2 × 4 + 3 = 11.',Q('mp2r','Mathematics (Elective)','Functions','functions','If g(x) = 3x − 2, what is g(5)?',['13','15','7','10'],0,'Substitute x = 5: g(5) = 15 − 2 = 13.')),
+            Q('mp3','Mathematics (Elective)','Geometry','geometry','A triangle has base 10 cm and height 6 cm. What is its area?',['30 cm²','60 cm²','16 cm²','20 cm²'],0,'Triangle area = (base × height)/2 = (10 × 6)/2 = 30 cm².',Q('mp3r','Mathematics (Elective)','Geometry','geometry','A triangle has base 8 cm and height 5 cm. What is its area?',['20 cm²','40 cm²','13 cm²','16 cm²'],0,'Area = (8 × 5)/2 = 20 cm².'))
+          ],
+          informatics:[
+            Q('cs1','Computer Science','Algorithms and Data Structures','complexity','What is the worst-case time complexity of QuickSort?',['O(n log n)','O(n²)','O(n)','O(1)'],1,'If each pivot splits the array very unevenly, the total work can be proportional to n².',Q('cs1r','Computer Science','Algorithms and Data Structures','complexity','What is the worst-case time complexity of linear search in an array of n items?',['O(n)','O(log n)','O(1)','O(n²)'],0,'In the worst case, linear search checks all n items, so the time complexity is O(n).')),
+            Q('cs2','Computer Science','Number Systems','number_systems','What is the binary representation of decimal 5?',['101','110','100','111'],0,'5 = 4 + 1, so its binary representation is 101.',Q('cs2r','Computer Science','Number Systems','number_systems','What is the binary representation of decimal 6?',['110','101','111','100'],0,'6 = 4 + 2, so its binary representation is 110.')),
+            Q('cs3','Computer Science','Programming Basics','variables','Which Python data type is suitable for the value True?',['bool','str','float','list'],0,'True and False are Boolean values in Python, represented by the bool type.',Q('cs3r','Computer Science','Programming Basics','variables','Which Python value is a Boolean value?',['False','"False"','0.5','[False]'],0,'False without quotation marks is a Boolean value.'))
+          ],
+          physics:[Q('ph1','Physics','Speed','speed','A car travels 120 km in 2 hours. What is its average speed?',['60 km/h','30 km/h','120 km/h','240 km/h'],0,'Average speed = distance/time = 120/2 = 60 km/h.',Q('ph1r','Physics','Speed','speed','A cyclist travels 45 km in 3 hours. Average speed?',['15 km/h','12 km/h','135 km/h','48 km/h'],0,'45/3 = 15 km/h.'))],
+          biology:[Q('bio1','Biology','Cell Biology','cells','Which organelle is the main site of cellular respiration?',['Mitochondrion','Ribosome','Nucleus','Golgi apparatus'],0,'Mitochondria are the main site of aerobic cellular respiration.',Q('bio1r','Biology','Cell Biology','cells','Which organelle contains most of a eukaryotic cell’s DNA?',['Nucleus','Ribosome','Cell membrane','Vacuole'],0,'The nucleus contains most of the DNA in a eukaryotic cell.'))],
+          chemistry:[Q('ch1','Chemistry','Atomic Structure','atoms','What is the electrical charge of a proton?',['Positive','Negative','Neutral','Variable in every atom'],0,'A proton has a positive electric charge.',Q('ch1r','Chemistry','Atomic Structure','atoms','Which subatomic particle has a negative charge?',['Electron','Proton','Neutron','Nucleus'],0,'Electrons carry a negative electric charge.'))],
+          world_history:[Q('wh1','World History','Ancient Civilizations','ancient','Which civilization developed along the Nile River?',['Ancient Egypt','Ancient Rome','Maya','Indus Valley only'],0,'Ancient Egyptian civilization developed along the Nile.',Q('wh1r','World History','Ancient Civilizations','ancient','The city of Rome was central to which ancient civilization?',['Roman','Egyptian','Mayan','Sumerian'],0,'Rome was the central city of the Roman civilization.'))],
+          law:[Q('law1','Fundamentals of Law','Constitution','constitution','What is the primary role of a constitution?',['Establish the fundamental principles and structure of the state','Set prices in shops','Replace every law with a contract','Describe only local customs'],0,'A constitution establishes the core principles, institutions, and rules of a state.',Q('law1r','Fundamentals of Law','Constitution','constitution','Which document generally has the highest legal force within a state?',['Constitution','School timetable','Private receipt','News article'],0,'A constitution generally has the highest legal force in the national legal system.'))]
+        };
+        function loadStore(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')}catch(e){return {}}}
+        function saveStore(store){localStorage.setItem(STORAGE_KEY,JSON.stringify(store))}
+        function userData(){const store=loadStore();return store[currentUser]||(store[currentUser]={history:[],skills:{},profile:{grade:'Grade 11',language:'English (EN)',profilePair:'Math-Informatics'}})}
+        function persistUser(){const store=loadStore();store[currentUser]=userData();saveStore(store)}
+        function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+        function getActiveSubjects(){const pair=userData().profile.profilePair||'Math-Informatics';const elective=(profilePairs[pair]||profilePairs['Math-Informatics']);return [...mandatoryIds.map(id=>subjectBase.find(s=>s.id===id)),...elective.map((id,i)=>({id,title:subjectNames[id]||id,type:'Profile'}))].map(s=>({...s,questionsCount:(localQuestionBank[s.id]||[]).length,progress:subjectProgress(s.id)}))}
+        function subjectProgress(id){const h=userData().history.filter(a=>a.subjectId===id);return h.length?Math.round(h.reduce((n,a)=>n+a.percent,0)/h.length):0}
+        function showScreen(screenId){['auth','dashboard','subjects','test','results','agent','history','profile'].forEach(id=>document.getElementById('screen-'+id).classList.add('hidden'));document.getElementById('screen-'+screenId).classList.remove('hidden');window.scrollTo({top:0,behavior:'smooth'});if(window.lucide)lucide.createIcons();if(screenId==='dashboard')renderDashboard();if(screenId==='history')renderHistory();if(screenId==='subjects')renderSubjects();if(screenId==='profile')renderProfile()}
+        function handleAuth(e){e.preventDefault();const email=document.getElementById('auth-email').value.trim().toLowerCase();const password=document.getElementById('auth-password').value;if(!email||password.length<6){alert('Enter a valid email and a password with at least 6 characters.');return}currentUser=email;const store=loadStore();if(!store[email])store[email]={history:[],skills:{},profile:{grade:'Grade 11',language:'English (EN)',profilePair:document.getElementById('auth-profile-pair').value}};else store[email].profile.profilePair=document.getElementById('auth-profile-pair').value;saveStore(store);userProfile=store[email].profile;document.getElementById('profile-email-disp').value=email;document.getElementById('profile-name-disp').value=email.split('@')[0];showScreen('dashboard')}
+        function logout(){if(timerHandle)clearInterval(timerHandle);currentUser=null;showScreen('auth')}
+        function renderSubjects(){const grid=document.getElementById('subjects-grid');const subs=getActiveSubjects();document.getElementById('current-profile-label').innerText=(document.querySelector('#auth-profile-pair option:checked')||{}).textContent||subs.slice(-2).map(s=>s.title).join(' + ');grid.innerHTML=subs.map(sub=>`<div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between"><div><span class="text-xs font-semibold px-2.5 py-1 rounded-full ${sub.type==='Mandatory'?'bg-indigo-50 text-indigo-600':'bg-violet-50 text-violet-600'}">${sub.type}</span><h3 class="font-bold text-slate-800 text-lg mt-3">${esc(sub.title)}</h3><p class="text-xs text-slate-500 mt-1">Available Questions: ${sub.questionsCount}</p></div><div class="mt-6 flex items-center justify-between"><span class="text-xs font-bold text-slate-600">Average: ${sub.progress}%</span><button onclick="startDiagnosticTest('${sub.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-xl">Start Test</button></div></div>`).join('')}
+        function renderDashboard(){if(!currentUser)return;const name=(currentUser.split('@')[0]||'Student').replace(/[._-]/g,' ');document.querySelector('#screen-dashboard h2.text-2xl').innerText='Welcome, '+name+'! 👋';const h=userData().history;const avg=h.length?Math.round(h.reduce((n,a)=>n+a.percent,0)/h.length):0;document.querySelector('#screen-dashboard .bg-gradient-to-r p').innerHTML=`Your average score: <strong class="text-white">${avg}%</strong> · ${h.length} completed test(s).`;const weak={};h.forEach(a=>(a.mistakes||[]).forEach(m=>{if(!userData().skills[m.skill_id]?.mastered)weak[m.skill_id]=m}));const list=document.getElementById('weak-topics-list');const arr=Object.values(weak);document.querySelector('#screen-dashboard h3 span:last-child').innerText=`${arr.length} Unresolved Skill(s)`;list.innerHTML=arr.length?arr.map(m=>`<div class="p-3 bg-slate-50 rounded-xl flex justify-between items-center border border-slate-100"><div><h4 class="text-sm font-bold">${esc(m.subject_title)}: ${esc(m.topic)}</h4><p class="text-xs text-slate-500">Needs practice · Confidence: Low</p></div><button onclick="openAgentReview('${m.question_id}')" class="bg-indigo-50 text-indigo-600 text-xs px-3 py-1.5 rounded-lg font-semibold">Review</button></div>`).join(''):'<p class="text-sm text-slate-500">No unresolved skills yet. Complete a test to get personalized recommendations.</p>';document.getElementById('recommendation-text').innerText=arr.length?`Focus next on ${arr[0].topic} in ${arr[0].subject_title}. Review the explanation and complete an independent recheck.`:'Complete a diagnostic test. Your recommendations will be based on the topics you find difficult.'}
+        function startDiagnosticTest(subjectId){const bank=localQuestionBank[subjectId]||[];if(!bank.length){alert('There are not enough questions for this subject in the current prototype yet. Choose one of the available subjects.');return}activeSubjectId=subjectId;currentTestQuestions=bank;currentQuestionIdx=0;userAnswers={};activeMistakes=[];remainingSeconds=300;testStartedAt=Date.now();if(timerHandle)clearInterval(timerHandle);showScreen('test');renderQuestion();updateTimer();timerHandle=setInterval(()=>{remainingSeconds--;updateTimer();if(remainingSeconds<=0){clearInterval(timerHandle);submitTest(true)}},1000)}
+        function updateTimer(){const el=document.getElementById('test-timer');if(el)el.innerText=`${String(Math.floor(remainingSeconds/60)).padStart(2,'0')}:${String(remainingSeconds%60).padStart(2,'0')}`}
+        function renderQuestion(){const q=currentTestQuestions[currentQuestionIdx];document.getElementById('test-subject-title').innerText=q.subject_title;document.getElementById('test-progress-title').innerText=`Question ${currentQuestionIdx+1} of ${currentTestQuestions.length}`;document.getElementById('question-container').innerHTML=`<div class="space-y-2"><span class="text-xs font-semibold text-slate-400 uppercase">Topic: ${esc(q.topic)}</span><h4 class="font-bold text-slate-800 text-base">${esc(q.prompt)}</h4></div><div class="space-y-3">${q.options.map((opt,idx)=>`<label class="flex items-center space-x-3 p-3.5 border rounded-xl cursor-pointer hover:bg-slate-50 ${userAnswers[currentQuestionIdx]===idx?'border-indigo-600 bg-indigo-50/50':'border-slate-200'}"><input type="radio" name="test-option" value="${idx}" ${userAnswers[currentQuestionIdx]===idx?'checked':''} onchange="userAnswers[currentQuestionIdx]=${idx}" class="text-indigo-600"><span class="text-sm font-medium text-slate-700">${esc(opt)}</span></label>`).join('')}</div>`;const back=document.querySelector('#screen-test button[onclick="prevQuestion()"]');back.disabled=currentQuestionIdx===0;back.classList.toggle('opacity-40',currentQuestionIdx===0);document.querySelector('#screen-test button[onclick="nextQuestion()"]')?.replaceChildren(document.createTextNode(currentQuestionIdx===currentTestQuestions.length-1?'Submit Test':'Next'))}
+        function nextQuestion(){if(userAnswers[currentQuestionIdx]===undefined&&!confirm('You have not selected an answer. Continue anyway?'))return;if(currentQuestionIdx<currentTestQuestions.length-1){currentQuestionIdx++;renderQuestion()}else submitTest(false)}function prevQuestion(){if(currentQuestionIdx>0){currentQuestionIdx--;renderQuestion()}}
+        function submitTest(timedOut=false){if(!currentTestQuestions.length)return;if(timerHandle)clearInterval(timerHandle);let score=0;activeMistakes=[];currentTestQuestions.forEach((q,idx)=>{const ans=userAnswers[idx];if(ans===q.correct_idx)score++;else activeMistakes.push({question_id:q.id,subject_title:q.subject_title,topic:q.topic,skill_id:q.skill_id,user_answer:q.options[ans]||'No answer selected',correct_answer:q.options[q.correct_idx],explanation:q.explanation})});const attempt={id:Date.now(),date:new Date().toISOString(),subjectId:activeSubjectId,subject:currentTestQuestions[0].subject_title,mode:'Diagnostic Test',score,total:currentTestQuestions.length,percent:Math.round(score/currentTestQuestions.length*100),timedOut,mistakes:activeMistakes};userData().history.unshift(attempt);activeMistakes.forEach(m=>{const sk=userData().skills[m.skill_id]||{mistakes:0,mastered:false};sk.mistakes++;sk.mastered=false;userData().skills[m.skill_id]=sk});persistUser();document.getElementById('res-score-circle').innerText=`${score}/${currentTestQuestions.length}`;document.getElementById('res-score-val').innerText=`${score} / ${currentTestQuestions.length} (${attempt.percent}%)`;document.getElementById('res-mistakes-val').innerText=`${activeMistakes.length} mistake(s)`+(timedOut?' · Time expired':'');document.getElementById('mistakes-review-container').innerHTML=activeMistakes.length?activeMistakes.map(m=>`<div class="p-3 bg-rose-50 border border-rose-100 rounded-xl flex justify-between items-center gap-3"><div><h5 class="text-xs font-bold">${esc(m.topic)}</h5><p class="text-xs text-slate-500">Your answer: ${esc(m.user_answer)}</p><p class="text-xs text-emerald-700">Correct: ${esc(m.correct_answer)}</p></div><button onclick="openAgentReview('${m.question_id}')" class="bg-rose-600 text-white text-xs px-3 py-1.5 rounded-lg">Review</button></div>`).join(''):'<p class="text-sm text-emerald-700 font-semibold">Excellent! No mistakes in this attempt.</p>';showScreen('results')}
+        function findQuestion(qId){for(const bank of Object.values(localQuestionBank)){const q=bank.find(item=>item.id===qId);if(q)return q}return null}
+        function openAgentReview(qId){const q=findQuestion(qId);if(!q){alert('Question could not be found.');return}reviewQuestion=q;recheckQuestion=q.recheck||null;document.getElementById('agent-explanation-box').innerHTML=`<h5 class="font-bold text-indigo-900">${esc(q.subject_title)} · ${esc(q.topic)}</h5><p><strong>Original question:</strong> ${esc(q.prompt)}</p><hr class="border-indigo-200 my-2"><p><strong>Explanation (prepared and verified for this prototype):</strong> ${esc(q.explanation)}</p><p class="text-xs text-indigo-700 mt-2">This is a rule-based explanation bank, not a live generative AI response.</p>`;const box=document.getElementById('recheck-question-box');if(!recheckQuestion){box.innerHTML='<p class="text-sm text-amber-700">No matching follow-up question is available for this skill yet.</p>';showScreen('agent');return}box.innerHTML=`<p class="text-xs font-semibold text-slate-700">New question · same skill: ${esc(recheckQuestion.topic)}</p><p class="text-sm text-slate-700">${esc(recheckQuestion.prompt)}</p><div class="space-y-2 mt-3">${recheckQuestion.options.map((o,i)=>`<label class="flex items-center gap-2 text-sm"><input type="radio" name="recheck" value="${i}"><span>${esc(o)}</span></label>`).join('')}</div><p id="recheck-feedback" class="text-sm mt-2" aria-live="polite"></p>`;showScreen('agent')}
+        function submitRecheckAnswer(){if(!recheckQuestion){alert('No follow-up question available for this skill.');return}const selected=document.querySelector('input[name="recheck"]:checked');if(!selected){alert('Select an answer first.');return}const correct=Number(selected.value)===recheckQuestion.correct_idx;const feedback=document.getElementById('recheck-feedback');if(correct){feedback.className='text-sm mt-2 text-emerald-700 font-semibold';feedback.innerText='Correct. Independent recheck passed. Skill marked as confirmed.';userData().skills[reviewQuestion.skill_id]={...(userData().skills[reviewQuestion.skill_id]||{}),mastered:true,confirmedAt:new Date().toISOString()};persistUser();setTimeout(()=>showScreen('dashboard'),1100)}else{feedback.className='text-sm mt-2 text-rose-700 font-semibold';feedback.innerText='Not quite. Review the explanation and try again. Correct answer: '+recheckQuestion.options[recheckQuestion.correct_idx]+'. '+recheckQuestion.explanation;userData().skills[reviewQuestion.skill_id]={...(userData().skills[reviewQuestion.skill_id]||{}),mastered:false};persistUser()}}
+        function renderHistory(){const tbody=document.getElementById('history-table-body');const h=userData().history;if(!h.length){tbody.innerHTML='<tr><td colspan="5" class="p-6 text-center text-slate-500">No test attempts yet. Complete a test to build your history.</td></tr>';return}tbody.innerHTML=h.map(a=>`<tr class="border-b"><td class="p-4">${new Date(a.date).toLocaleString()}</td><td class="p-4">${esc(a.subject)}</td><td class="p-4">${esc(a.mode)}</td><td class="p-4 font-bold text-indigo-600">${a.score} / ${a.total} (${a.percent}%)</td><td class="p-4"><span class="${a.mistakes.length?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700'} text-xs px-2.5 py-1 rounded-full">${a.mistakes.length?'Review needed':'Completed'}</span></td></tr>`).join('')}
+        function renderProfile(){const d=userData();document.getElementById('profile-email-disp').value=currentUser||'';document.getElementById('profile-name-disp').value=(currentUser||'Student').split('@')[0];document.getElementById('profile-grade').value=d.profile.grade||'Grade 11';document.getElementById('profile-language').value=d.profile.language||'English (EN)'}
+        function saveProfile(){const d=userData();d.profile.grade=document.getElementById('profile-grade').value.trim()||'Grade 11';d.profile.language=document.getElementById('profile-language').value;persistUser();alert('Profile settings saved in this browser.');renderSubjects()}
+        // Start in auth screen; all progress is user-specific and survives reloads in this browser.
         renderSubjects();
     </script>
 </body>
